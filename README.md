@@ -55,13 +55,25 @@ State is persisted only for the lifetime of the current OpenFox process. This
 allows disable/re-enable without losing a running status while preventing stale
 "running" state from surviving an OpenFox restart.
 
+## TypeScript and distribution
+
+The maintained source is TypeScript in `src/index.ts`, with strict checking
+enabled. `src/openfox-plugin.d.ts` is a narrow compile-time mirror of the
+pending #370/#374 OpenFox contracts; once those contracts ship in a released
+OpenFox package it can be replaced by the published `openfox/plugin` types.
+
+OpenFox's GitHub plugin installer clones repositories and loads the configured
+entry point; it does not build TypeScript. For that reason the generated
+`dist/index.js` is committed and `openfox.entry` points to it. CI rebuilds
+`dist` and fails if the checked-in output is stale.
+
 ## Scope
 
 The plugin does **not**:
 
 - start or stop dev servers;
 - modify `.openfox/dev.json`;
-- import OpenFox private internals;
+- import OpenFox private runtime internals;
 - patch React components;
 - open its own sockets or polling process.
 
@@ -71,6 +83,7 @@ Its only capabilities are `ui`, `hooks` and `rpc`.
 
 ```bash
 npm install
+npm run typecheck
 npm test
 ```
 
