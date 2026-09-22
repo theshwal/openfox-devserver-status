@@ -136,7 +136,7 @@ export function register(registry) {
     id: 'devserver-status',
     slot: 'session.row.badges',
     label: { en: 'Dev server', fr: 'Serveur dev' },
-    icon: 'server',
+    icon: 'M3 4h18v6H3z M3 14h18v6H3z M7 7h.01 M7 17h.01',
     appearance: 'icon',
     visibleWhen: { hasSession: true },
     source: {
