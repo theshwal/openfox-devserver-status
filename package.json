@@ -23,14 +23,6 @@
   "scripts": {
     "test": "vitest run"
   },
-  "peerDependencies": {
-    "openfox": ">=2.0.155"
-  },
-  "peerDependenciesMeta": {
-    "openfox": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "vitest": "^4.1.2"
   }
