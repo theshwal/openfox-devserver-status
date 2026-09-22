@@ -57,8 +57,7 @@ allows disable/re-enable without losing a running status while preventing stale
 
 ## TypeScript and distribution
 
-The maintained source is TypeScript in `src/index.ts`, with strict checking
-enabled. `src/openfox-plugin.d.ts` is a narrow compile-time mirror of the
+All maintained source and tests are TypeScript (`src/index.ts` and `test/index.test.ts`), with strict checking enabled. `src/openfox-plugin.d.ts` is a narrow compile-time mirror of the
 pending #370/#374 OpenFox contracts; once those contracts ship in a released
 OpenFox package it can be replaced by the published `openfox/plugin` types.
 
