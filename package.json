@@ -23,11 +23,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test test/index.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "npm run build && node --import tsx --test test/index.test.ts",
     "prepack": "npm run build"
   },
   "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.20.0",
     "typescript": "^5.8.3"
   }
 }

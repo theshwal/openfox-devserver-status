@@ -1,12 +1,19 @@
-import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { register } from '../dist/index.js'
+import { describe, it } from 'node:test'
+import type { PluginRegistry, PluginUiBadge } from 'openfox/plugin'
+import { register } from '../src/index.js'
 
-function createRegistry(sharedStorage = new Map()) {
-  const calls = {}
-  const record = (key) => (value) => {
-    calls[key] = [...(calls[key] ?? []), value]
-  }
+type RegisteredHandler = (...args: any[]) => any
+type Calls = Record<string, unknown[]>
+
+function createRegistry(sharedStorage = new Map<string, string | number | boolean>()) {
+  const calls: Calls = {}
+
+  const record =
+    <T>(key: string) =>
+    (value: T): void => {
+      calls[key] = [...(calls[key] ?? []), value]
+    }
 
   const context = {
     id: 'openfox-devserver-status',
@@ -14,8 +21,8 @@ function createRegistry(sharedStorage = new Map()) {
     runtime: { mode: 'production', configDirectory: '/tmp' },
     logger: { debug() {}, info() {}, warn() {}, error() {} },
     storage: {
-      get: (key) => sharedStorage.get(key),
-      set: (key, value) => sharedStorage.set(key, value),
+      get: (key: string) => sharedStorage.get(key),
+      set: (key: string, value: string | number | boolean) => sharedStorage.set(key, value),
     },
     settings: () => ({}),
     notify() {},
@@ -25,18 +32,22 @@ function createRegistry(sharedStorage = new Map()) {
   const registry = {
     runtime: context.runtime,
     context,
-    registerUiBadge: record('badge'),
-    registerRpc: (method, handler) => record(`rpc:${method}`)(handler),
-    registerHook: (event, handler) => record(`hook:${event}`)(handler),
+    registerUiBadge: record<PluginUiBadge>('badge'),
+    registerRpc: (method: string, handler: RegisteredHandler) => record<RegisteredHandler>(`rpc:${method}`)(handler),
+    registerHook: (event: string, handler: RegisteredHandler) => record<RegisteredHandler>(`hook:${event}`)(handler),
   }
 
-  return { registry, calls, sharedStorage }
+  return {
+    registry: registry as unknown as PluginRegistry,
+    calls,
+    sharedStorage,
+  }
 }
 
-function handler(calls, key) {
-  const handlers = calls[key]
-  assert.ok(handlers?.[0], `Missing handler: ${key}`)
-  return handlers[0]
+function handler(calls: Calls, key: string): RegisteredHandler {
+  const candidate = calls[key]?.[0]
+  assert.equal(typeof candidate, 'function', `Missing handler: ${key}`)
+  return candidate as RegisteredHandler
 }
 
 describe('openfox-devserver-status', () => {
@@ -44,19 +55,19 @@ describe('openfox-devserver-status', () => {
     const { registry, calls } = createRegistry()
     register(registry)
 
-    assert.equal(calls.badge.length, 1)
-    const badge = calls.badge[0]
+    assert.equal(calls.badge?.length, 1)
+    const badge = calls.badge?.[0] as PluginUiBadge
     assert.equal(badge.id, 'devserver-status')
     assert.equal(badge.slot, 'session.row.badges')
     assert.equal(badge.appearance, 'icon')
-    assert.equal(badge.source.kind, 'rpc')
-    assert.equal(badge.source.method, 'status')
-    assert.equal(badge.source.refreshMs, 2000)
-    assert.equal(badge.source.cacheScope, 'workdir')
-    assert.equal(calls['rpc:status'].length, 1)
-    assert.equal(calls['hook:devserver.state.changed'].length, 1)
-    assert.equal(calls['hook:devserver.started'].length, 1)
-    assert.equal(calls['hook:devserver.stopped'].length, 1)
+    assert.equal(badge.source?.kind, 'rpc')
+    assert.equal(badge.source?.method, 'status')
+    assert.equal(badge.source?.refreshMs, 2000)
+    assert.equal(badge.source?.cacheScope, 'workdir')
+    assert.equal(calls['rpc:status']?.length, 1)
+    assert.equal(calls['hook:devserver.state.changed']?.length, 1)
+    assert.equal(calls['hook:devserver.started']?.length, 1)
+    assert.equal(calls['hook:devserver.stopped']?.length, 1)
   })
 
   it('is invisible while no state is known or the server is off', async () => {
@@ -80,7 +91,11 @@ describe('openfox-devserver-status', () => {
       data: { workdir: '/tmp/a', url: 'http://localhost:4173' },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' })
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string }
+    }
     assert.equal(result.visible, true)
     assert.equal(result.tone, 'success')
     assert.match(result.tooltip.en, /http:\/\/localhost:4173/)
@@ -101,7 +116,11 @@ describe('openfox-devserver-status', () => {
         errorMessage: 'Vite reported a problem',
       },
     })
-    let result = await status({}, { workdir: '/tmp/a' })
+    let result = await status({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string }
+    }
     assert.equal(result.visible, true)
     assert.equal(result.tone, 'warning')
     assert.match(result.tooltip.en, /Vite reported a problem/)
@@ -114,14 +133,18 @@ describe('openfox-devserver-status', () => {
         errorMessage: 'Process exited',
       },
     })
-    result = await status({}, { workdir: '/tmp/a' })
+    result = await status({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string }
+    }
     assert.equal(result.visible, true)
     assert.equal(result.tone, 'danger')
     assert.match(result.tooltip.en, /Process exited/)
   })
 
   it('keeps state across plugin re-enable in the same OpenFox process', async () => {
-    const storage = new Map()
+    const storage = new Map<string, string | number | boolean>()
     const first = createRegistry(storage)
     register(first.registry)
 
@@ -131,7 +154,10 @@ describe('openfox-devserver-status', () => {
 
     const second = createRegistry(storage)
     register(second.registry)
-    const result = await handler(second.calls, 'rpc:status')({}, { workdir: '/tmp/a' })
+    const result = await handler(second.calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+    }
     assert.equal(result.visible, true)
     assert.equal(result.tone, 'success')
   })
@@ -149,7 +175,11 @@ describe('openfox-devserver-status', () => {
       },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' })
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string }
+    }
     assert.equal(result.visible, true)
     assert.equal(result.tone, 'danger')
     assert.match(result.tooltip.en, /spawn failed/)
