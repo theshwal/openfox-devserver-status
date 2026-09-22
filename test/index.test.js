@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { register } from './index.js'
+import { register } from '../dist/index.js'
 
 function createRegistry(sharedStorage = new Map()) {
   const calls = {}
@@ -10,7 +10,7 @@ function createRegistry(sharedStorage = new Map()) {
 
   const context = {
     id: 'openfox-devserver-status',
-    version: '0.1.0',
+    version: '0.2.0',
     runtime: { mode: 'production', configDirectory: '/tmp' },
     logger: { debug() {}, info() {}, warn() {}, error() {} },
     storage: {

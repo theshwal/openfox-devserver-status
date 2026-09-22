@@ -1,16 +1,17 @@
 {
   "name": "openfox-devserver-status",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Passive per-session dev-server status indicators for OpenFox",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "openfox": {
     "apiVersion": 2,
-    "entry": "./src/index.js",
+    "entry": "./dist/index.js",
     "displayName": "Dev Server Status",
     "description": "Shows the live dev-server state directly on OpenFox session rows.",
     "capabilities": [
@@ -21,6 +22,12 @@
     "timeoutMs": 5000
   },
   "scripts": {
-    "test": "node --test"
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/index.test.js",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
   }
 }
