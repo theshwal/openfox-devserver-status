@@ -22,7 +22,7 @@ The complete implementation relies on two generic OpenFox extension points:
 
 1. **Dynamic session-row badges** — RPC badge results may control visibility,
    tone, tooltip and icon, with optional refresh and workdir-scoped caching.
-   This is carried by upstream PR **co-l/openfox#248**.
+   This is carried by upstream PR **co-l/openfox#374**.
 2. **Dev-server plugin hooks** — `devserver.started`, `devserver.stopped` and
    `devserver.state.changed`.
    These are carried by upstream PR **co-l/openfox#370**.
