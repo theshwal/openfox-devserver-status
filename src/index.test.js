@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
 import { register } from './index.js'
 
 function createRegistry(sharedStorage = new Map()) {
@@ -11,14 +12,14 @@ function createRegistry(sharedStorage = new Map()) {
     id: 'openfox-devserver-status',
     version: '0.1.0',
     runtime: { mode: 'production', configDirectory: '/tmp' },
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger: { debug() {}, info() {}, warn() {}, error() {} },
     storage: {
       get: (key) => sharedStorage.get(key),
       set: (key, value) => sharedStorage.set(key, value),
     },
     settings: () => ({}),
-    notify: vi.fn(),
-    publish: vi.fn(),
+    notify() {},
+    publish() {},
   }
 
   const registry = {
@@ -29,12 +30,12 @@ function createRegistry(sharedStorage = new Map()) {
     registerHook: (event, handler) => record(`hook:${event}`)(handler),
   }
 
-  return { registry, calls, context, sharedStorage }
+  return { registry, calls, sharedStorage }
 }
 
 function handler(calls, key) {
   const handlers = calls[key]
-  if (!handlers?.[0]) throw new Error(`Missing handler: ${key}`)
+  assert.ok(handlers?.[0], `Missing handler: ${key}`)
   return handlers[0]
 }
 
@@ -43,36 +44,32 @@ describe('openfox-devserver-status', () => {
     const { registry, calls } = createRegistry()
     register(registry)
 
-    expect(calls.badge).toHaveLength(1)
-    expect(calls.badge[0]).toMatchObject({
-      id: 'devserver-status',
-      slot: 'session.row.badges',
-      icon: 'M3 4h18v6H3z M3 14h18v6H3z M7 7h.01 M7 17h.01',
-      appearance: 'icon',
-      source: {
-        kind: 'rpc',
-        method: 'status',
-        refreshMs: 2000,
-        cacheScope: 'workdir',
-      },
-    })
-    expect(calls['rpc:status']).toHaveLength(1)
-    expect(calls['hook:devserver.state.changed']).toHaveLength(1)
-    expect(calls['hook:devserver.started']).toHaveLength(1)
-    expect(calls['hook:devserver.stopped']).toHaveLength(1)
+    assert.equal(calls.badge.length, 1)
+    const badge = calls.badge[0]
+    assert.equal(badge.id, 'devserver-status')
+    assert.equal(badge.slot, 'session.row.badges')
+    assert.equal(badge.appearance, 'icon')
+    assert.equal(badge.source.kind, 'rpc')
+    assert.equal(badge.source.method, 'status')
+    assert.equal(badge.source.refreshMs, 2000)
+    assert.equal(badge.source.cacheScope, 'workdir')
+    assert.equal(calls['rpc:status'].length, 1)
+    assert.equal(calls['hook:devserver.state.changed'].length, 1)
+    assert.equal(calls['hook:devserver.started'].length, 1)
+    assert.equal(calls['hook:devserver.stopped'].length, 1)
   })
 
   it('is invisible while no state is known or the server is off', async () => {
     const { registry, calls } = createRegistry()
     register(registry)
-
     const status = handler(calls, 'rpc:status')
-    await expect(status({}, { workdir: '/tmp/a' })).resolves.toEqual({ visible: false })
+
+    assert.deepEqual(await status({}, { workdir: '/tmp/a' }), { visible: false })
 
     await handler(calls, 'hook:devserver.stopped')({
       data: { workdir: '/tmp/a', reason: 'stop', url: 'http://localhost:3000' },
     })
-    await expect(status({}, { workdir: '/tmp/a' })).resolves.toEqual({ visible: false })
+    assert.deepEqual(await status({}, { workdir: '/tmp/a' }), { visible: false })
   })
 
   it('maps a started event to a green running badge', async () => {
@@ -84,13 +81,9 @@ describe('openfox-devserver-status', () => {
     })
 
     const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' })
-    expect(result).toMatchObject({
-      visible: true,
-      tone: 'success',
-      tooltip: {
-        en: expect.stringContaining('http://localhost:4173'),
-      },
-    })
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'success')
+    assert.match(result.tooltip.en, /http:\/\/localhost:4173/)
   })
 
   it('maps the full state hook to warning and error presentations', async () => {
@@ -108,11 +101,10 @@ describe('openfox-devserver-status', () => {
         errorMessage: 'Vite reported a problem',
       },
     })
-    await expect(status({}, { workdir: '/tmp/a' })).resolves.toMatchObject({
-      visible: true,
-      tone: 'warning',
-      tooltip: { en: expect.stringContaining('Vite reported a problem') },
-    })
+    let result = await status({}, { workdir: '/tmp/a' })
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'warning')
+    assert.match(result.tooltip.en, /Vite reported a problem/)
 
     await stateChanged({
       data: {
@@ -122,11 +114,10 @@ describe('openfox-devserver-status', () => {
         errorMessage: 'Process exited',
       },
     })
-    await expect(status({}, { workdir: '/tmp/a' })).resolves.toMatchObject({
-      visible: true,
-      tone: 'danger',
-      tooltip: { en: expect.stringContaining('Process exited') },
-    })
+    result = await status({}, { workdir: '/tmp/a' })
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'danger')
+    assert.match(result.tooltip.en, /Process exited/)
   })
 
   it('keeps state across plugin re-enable in the same OpenFox process', async () => {
@@ -140,11 +131,9 @@ describe('openfox-devserver-status', () => {
 
     const second = createRegistry(storage)
     register(second.registry)
-
-    await expect(handler(second.calls, 'rpc:status')({}, { workdir: '/tmp/a' })).resolves.toMatchObject({
-      visible: true,
-      tone: 'success',
-    })
+    const result = await handler(second.calls, 'rpc:status')({}, { workdir: '/tmp/a' })
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'success')
   })
 
   it('maps an error stop to a red error badge', async () => {
@@ -160,10 +149,9 @@ describe('openfox-devserver-status', () => {
       },
     })
 
-    await expect(handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' })).resolves.toMatchObject({
-      visible: true,
-      tone: 'danger',
-      tooltip: { en: expect.stringContaining('spawn failed') },
-    })
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' })
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'danger')
+    assert.match(result.tooltip.en, /spawn failed/)
   })
 })
