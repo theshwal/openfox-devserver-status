@@ -184,4 +184,154 @@ describe('openfox-devserver-status', () => {
     assert.equal(result.tone, 'danger')
     assert.match(result.tooltip.en, /spawn failed/)
   })
+
+  it('packs tooltip as a single dot-separated line including state, URL and relative age (CA-1, CA-4)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    await handler(calls, 'hook:devserver.started')({
+      data: {
+        workdir: '/tmp/a',
+        url: 'http://localhost:4173',
+        command: 'vite',
+      },
+    })
+
+    const status = handler(calls, 'rpc:status')
+    const result = await status({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string; fr: string }
+    }
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'success')
+    assert.ok(!result.tooltip.en.includes('\n'), 'English tooltip must be single-line')
+    assert.ok(!result.tooltip.fr.includes('\n'), 'French tooltip must be single-line')
+    assert.match(result.tooltip.en, /Running · http:\/\/localhost:4173 · Updated \d+s ago/)
+    assert.match(result.tooltip.fr, /En cours · http:\/\/localhost:4173 · Maj : il y a \d+s/)
+  })
+
+  it('refreshes the relative age on each RPC call without re-emitting a hook (CA-4)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    const startedAt = Date.now()
+    await handler(calls, 'hook:devserver.started')({
+      data: { workdir: '/tmp/a', url: 'http://localhost:4173' },
+    })
+
+    const status = handler(calls, 'rpc:status')
+
+    const first = await status({}, { workdir: '/tmp/a' }) as {
+      tooltip: { fr: string }
+    }
+    assert.match(first.tooltip.fr, /Maj : il y a 0s/)
+
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+
+    const second = await status({}, { workdir: '/tmp/a' }) as {
+      tooltip: { fr: string }
+    }
+    const ageMatch = second.tooltip.fr.match(/Maj : il y a (\d+)s/)
+    assert.ok(ageMatch, 'should still include a relative age segment')
+    assert.ok(Number(ageMatch![1]) >= 1, `expected at least 1s elapsed, got ${ageMatch![1]}`)
+    void startedAt
+  })
+
+  it('surfaces the configured port as the badge value when running (CA-3)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    await handler(calls, 'hook:devserver.started')({
+      data: { workdir: '/tmp/a', url: 'http://localhost:5173' },
+    })
+
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      value?: string | number
+    }
+    assert.equal(result.visible, true)
+    assert.equal(result.value, '5173')
+  })
+
+  it('omits the badge value when the URL has no explicit port (CA-3)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    await handler(calls, 'hook:devserver.started')({
+      data: { workdir: '/tmp/a', url: 'http://localhost/' },
+    })
+
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      value?: string | number
+    }
+    assert.equal(result.visible, true)
+    assert.equal(result.value, undefined)
+  })
+
+  it('flags the URL as potentially unreachable on error and exposes the last command (CA-2, CA-5)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    await handler(calls, 'hook:devserver.started')({
+      data: {
+        workdir: '/tmp/a',
+        url: 'http://localhost:8000',
+        command: 'uvicorn app:app --port 8000',
+      },
+    })
+
+    await handler(calls, 'hook:devserver.stopped')({
+      data: {
+        workdir: '/tmp/a',
+        reason: 'error',
+        url: 'http://localhost:8000',
+        error: 'spawn failed',
+      },
+    })
+
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      visible: boolean
+      tone: string
+      tooltip: { en: string; fr: string }
+    }
+    assert.equal(result.visible, true)
+    assert.equal(result.tone, 'danger')
+    assert.match(result.tooltip.en, /URL may not be reachable/)
+    assert.match(result.tooltip.fr, /URL peut ne pas être joignable/)
+    assert.match(result.tooltip.en, /uvicorn app:app --port 8000/)
+    assert.match(result.tooltip.en, /spawn failed/)
+  })
+
+  it('localizes the age segment in the French error tooltip (regression for CA-1/CA-2)', async () => {
+    const { registry, calls } = createRegistry()
+    register(registry)
+
+    await handler(calls, 'hook:devserver.started')({
+      data: {
+        workdir: '/tmp/a',
+        url: 'http://localhost:8000',
+        command: 'uvicorn app:app --port 8000',
+      },
+    })
+
+    await handler(calls, 'hook:devserver.stopped')({
+      data: {
+        workdir: '/tmp/a',
+        reason: 'error',
+        url: 'http://localhost:8000',
+        error: 'spawn failed',
+      },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+
+    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+      tooltip: { en: string; fr: string }
+    }
+    assert.match(result.tooltip.fr, /Maj : il y a \d+s/)
+    assert.doesNotMatch(result.tooltip.fr, /Updated/)
+    assert.match(result.tooltip.en, /Updated \d+s ago/)
+  })
 })
