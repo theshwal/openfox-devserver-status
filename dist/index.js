@@ -1,6 +1,8 @@
 const STORAGE_PID_KEY = 'runtimePid';
 const STORAGE_STATES_KEY = 'states';
 const VALID_STATES = new Set(['off', 'running', 'warning', 'error']);
+export const RPC_NAMESPACE = 'devserverStatus.';
+export const RPC_METHOD = `${RPC_NAMESPACE}status`;
 function asString(value) {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
@@ -205,12 +207,12 @@ export function register(registry) {
         visibleWhen: { hasSession: true },
         source: {
             kind: 'rpc',
-            method: 'status',
+            method: RPC_METHOD,
             refreshMs: 2000,
             cacheScope: 'workdir',
         },
     });
-    registry.registerRpc('status', async (_params, rpcContext) => {
+    registry.registerRpc(RPC_METHOD, async (_params, rpcContext) => {
         const workdir = asString(rpcContext.workdir);
         if (!workdir)
             return { visible: false };
