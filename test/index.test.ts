@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { PluginRegistry, PluginUiBadge } from 'openfox/plugin'
-import { register } from '../src/index.js'
+import { register, RPC_NAMESPACE, RPC_METHOD } from '../src/index.js'
 
 type RegisteredHandler = (...args: any[]) => any
 type Calls = Record<string, unknown[]>
@@ -61,19 +61,26 @@ describe('openfox-devserver-status', () => {
     assert.equal(badge.slot, 'session.row.badges')
     assert.equal(badge.appearance, 'icon')
     assert.equal(badge.source?.kind, 'rpc')
-    assert.equal(badge.source?.method, 'status')
+    assert.equal(badge.source?.method, RPC_METHOD)
     assert.equal(badge.source?.refreshMs, 2000)
     assert.equal(badge.source?.cacheScope, 'workdir')
-    assert.equal(calls['rpc:status']?.length, 1)
+    assert.equal(calls[`rpc:${RPC_METHOD}`]?.length, 1)
     assert.equal(calls['hook:devserver.state.changed']?.length, 1)
     assert.equal(calls['hook:devserver.started']?.length, 1)
     assert.equal(calls['hook:devserver.stopped']?.length, 1)
   })
 
+  it('exposes the namespaced RPC contract from a single source of truth', () => {
+    assert.equal(RPC_NAMESPACE, 'devserverStatus.')
+    assert.equal(RPC_METHOD, 'devserverStatus.status')
+    assert.ok(RPC_METHOD.startsWith(RPC_NAMESPACE), 'RPC_METHOD must derive from RPC_NAMESPACE')
+    assert.equal(RPC_METHOD, `${RPC_NAMESPACE}status`)
+  })
+
   it('is invisible while no state is known or the server is off', async () => {
     const { registry, calls } = createRegistry()
     register(registry)
-    const status = handler(calls, 'rpc:status')
+    const status = handler(calls, `rpc:${RPC_METHOD}`)
 
     assert.deepEqual(await status({}, { workdir: '/tmp/a' }), { visible: false })
 
@@ -91,7 +98,7 @@ describe('openfox-devserver-status', () => {
       data: { workdir: '/tmp/a', url: 'http://localhost:4173' },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       tone: string
       tooltip: { en: string }
@@ -106,7 +113,7 @@ describe('openfox-devserver-status', () => {
     register(registry)
 
     const stateChanged = handler(calls, 'hook:devserver.state.changed')
-    const status = handler(calls, 'rpc:status')
+    const status = handler(calls, `rpc:${RPC_METHOD}`)
 
     await stateChanged({
       data: {
@@ -154,7 +161,7 @@ describe('openfox-devserver-status', () => {
 
     const second = createRegistry(storage)
     register(second.registry)
-    const result = await handler(second.calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(second.calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       tone: string
     }
@@ -175,7 +182,7 @@ describe('openfox-devserver-status', () => {
       },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       tone: string
       tooltip: { en: string }
@@ -197,7 +204,7 @@ describe('openfox-devserver-status', () => {
       },
     })
 
-    const status = handler(calls, 'rpc:status')
+    const status = handler(calls, `rpc:${RPC_METHOD}`)
     const result = await status({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       tone: string
@@ -220,7 +227,7 @@ describe('openfox-devserver-status', () => {
       data: { workdir: '/tmp/a', url: 'http://localhost:4173' },
     })
 
-    const status = handler(calls, 'rpc:status')
+    const status = handler(calls, `rpc:${RPC_METHOD}`)
 
     const first = await status({}, { workdir: '/tmp/a' }) as {
       tooltip: { fr: string }
@@ -246,7 +253,7 @@ describe('openfox-devserver-status', () => {
       data: { workdir: '/tmp/a', url: 'http://localhost:5173' },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       value?: string | number
     }
@@ -262,7 +269,7 @@ describe('openfox-devserver-status', () => {
       data: { workdir: '/tmp/a', url: 'http://localhost/' },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       value?: string | number
     }
@@ -291,7 +298,7 @@ describe('openfox-devserver-status', () => {
       },
     })
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       visible: boolean
       tone: string
       tooltip: { en: string; fr: string }
@@ -327,7 +334,7 @@ describe('openfox-devserver-status', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1100))
 
-    const result = await handler(calls, 'rpc:status')({}, { workdir: '/tmp/a' }) as {
+    const result = await handler(calls, `rpc:${RPC_METHOD}`)({}, { workdir: '/tmp/a' }) as {
       tooltip: { en: string; fr: string }
     }
     assert.match(result.tooltip.fr, /Maj : il y a \d+s/)
